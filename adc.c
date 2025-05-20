@@ -23,7 +23,7 @@ void sensores_init(void) {
 
     // Calibración interna ESP32
     adc_chars = calloc(1, sizeof(*adc_chars));
-    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN, ADC_WIDTH, 1100, adc_chars);
+    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN, ADC_WIDTH, 1100, adc_chars);    // 1100 mV es el voltaje de referencia del ADC
 
     // Si no existen aún, crea cola y grupo de eventos
     if (!cola_sensores)    cola_sensores    = xQueueCreate(15, sizeof(sensor_data_t));
@@ -67,36 +67,39 @@ void calibrar_humedad(void) {
     }
 }
 
-
+// Como el ADC del ESP32 es de 12 bits, el rango es 0..4095
+// Y el voltaje de referencia es 1100 mV 
 
 void vTaskReadSensors(void *pvParameters) {
-    sensor_data_t d;
-    uint32_t raw_h, raw_t;
+    sensor_data_t d;    // estructura para almacenar datos de sensores
+    uint32_t raw_h, raw_t;  // raw_h = humedad, raw_t = temperatura
 
-    while (1) {
+    for(;;) {
         // --- Humedad raw ---
         raw_h = adc1_get_raw(CANAL_HUMEDAD);
 
         // Si está calibrado, escala entre raw_dry..raw_wet
         if (raw_dry > raw_wet) {
-            int32_t delta = (int32_t)raw_dry - (int32_t)raw_h;
-            float pct = (float)delta * 100.0f / (float)(raw_dry - raw_wet);
-            d.humedad_pct = (pct < 0 ? 0 : (pct > 100 ? 100 : pct));
+            int32_t delta = (int32_t)raw_dry - (int32_t)raw_h;  // diferencia
+            float pct = (float)delta * 100.0f / (float)(raw_dry - raw_wet); // porcentaje
+            d.humedad_pct = (pct < 0 ? 0 : (pct > 100 ? 100 : pct));    // limita entre 0 y 100
         } else {
             // fallback: sin calibración
-            uint32_t mv = esp_adc_cal_raw_to_voltage(raw_h, adc_chars);
-            d.humedad_pct = mv * (100.0f / 4095.0f);
+            uint32_t mv = esp_adc_cal_raw_to_voltage(raw_h, adc_chars); // convierte a mV
+            d.humedad_pct = mv * (100.0f / 4095.0f);    // convierte a porcentaje
         }
 
         // --- Temperatura raw + voltaje ---
         raw_t = adc1_get_raw(CANAL_TEMP);
-        uint32_t mv_t = esp_adc_cal_raw_to_voltage(raw_t, adc_chars);
-        d.temperatura_c = mv_t * (330.0f / 4095.0f);
+        uint32_t mv_t = esp_adc_cal_raw_to_voltage(raw_t, adc_chars);   // convierte a mV
+        // La fórmula es: T(°C) = (Vout - 500) / 10
+        d.temperatura_c = mv_t * (330.0f / 4095.0f);    // Vout en mV
 
-        d.timestamp = xTaskGetTickCount();
+        d.timestamp = xTaskGetTickCount();  // tiempo en ticks
 
-        if (xQueueSend(cola_sensores, &d, pdMS_TO_TICKS(20)) == pdTRUE) {
-            xEventGroupSetBits(eventos_sensores, EVENTO_NUEVOS_DATOS);
+        // Envío de datos a la cola
+        if (xQueueSend(cola_sensores, &d, pdMS_TO_TICKS(20)) == pdTRUE) {   
+            xEventGroupSetBits(eventos_sensores, EVENTO_NUEVOS_DATOS);  // notifica que hay nuevos datos
         } else {
             ESP_LOGW(TAG, "Cola llena, descartando muestra");
         }
@@ -107,7 +110,7 @@ void vTaskReadSensors(void *pvParameters) {
 
 void vTaskProcessSensors(void *pvParameters) {
     sensor_data_t r;
-    while (1) {
+    for(;;) {
         if (xQueueReceive(cola_sensores, &r, portMAX_DELAY) == pdTRUE) {
             ESP_LOGI(TAG,
                 "Humedad: %.1f%%   Temp: %.1f°C   @%lu",
