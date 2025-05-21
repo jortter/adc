@@ -5,14 +5,18 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/event_groups.h"
+#include "mqtt_client.h"
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "nvs_flash.h"
 
 // Configuración ADC
 #define ADC_WIDTH      ADC_WIDTH_BIT_12
 #define ADC_ATTEN      ADC_ATTEN_DB_11
 
 // Canales ADC (ajusta según el pin que uses)
-#define CANAL_HUMEDAD   ADC1_CHANNEL_3   // GPIO4 en tu caso
-#define CANAL_TEMP      ADC1_CHANNEL_4   // GPIO2
+#define CANAL_HUMEDAD   ADC1_CHANNEL_3   // GPIO4 
+#define CANAL_TEMP      ADC1_CHANNEL_4   // GPIO5
 
 // Evento nuevo dato
 #define EVENTO_NUEVOS_DATOS (1 << 0)
@@ -38,5 +42,6 @@ void sensores_init(void);
 void calibrar_humedad(void);
 void vTaskReadSensors(void *pvParameters);
 void vTaskProcessSensors(void *pvParameters);
+void adc_set_mqtt_client(esp_mqtt_client_handle_t client);
 
 #endif // ADC_H

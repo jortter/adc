@@ -1,14 +1,24 @@
 // adc.c
 #include "adc.h"
-#include "mqtt.h"
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "mqtt_client.h"
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "nvs_flash.h"
+
+#define MQTT_TOPIC_PUBLISH   "/sensor/data"
+#define MQTT_TOPIC_SUBSCRIBE "/sensor/commands"
+
+static const char *MQTT_TAG = "MQTT_SENSOR";
 
 QueueHandle_t      cola_sensores    = NULL;
 EventGroupHandle_t eventos_sensores = NULL;
 const char       *TAG               = "SENSORES";
+
+static esp_mqtt_client_handle_t adc_mqtt_client = NULL;
 
 static esp_adc_cal_characteristics_t *adc_chars = NULL;
 // Calibración en dos puntos
@@ -91,14 +101,14 @@ void vTaskReadSensors(void *pvParameters) {
 
         // --- Temperatura raw + voltaje ---
         raw_t = adc1_get_raw(CANAL_TEMP);
-        uint32_t mv_t = esp_adc_cal_raw_to_voltage(raw_t, adc_chars);   // convierte a mV
-        // La fórmula es: T(°C) = (Vout - 500) / 10
-        d.temperatura_c = mv_t * (330.0f / 4095.0f);    // Vout en mV
+        uint32_t mv_t = esp_adc_cal_raw_to_voltage(raw_t, adc_chars);
+        //ESP_LOGI(TAG, "ADC temp: %lu mV (raw: %lu)", (unsigned long)mv_t, (unsigned long)raw_t);
+        d.temperatura_c = ((float)mv_t - 500.0f) / 10.0f;   // mV -> °C
 
         d.timestamp = xTaskGetTickCount();  // tiempo en ticks
 
         // Envío de datos a la cola
-        if (xQueueSend(cola_sensores, &d, pdMS_TO_TICKS(20)) == pdTRUE) {   
+        if (xQueueSend(cola_sensores, &d, pdMS_TO_TICKS(20)) == pdTRUE) {
             xEventGroupSetBits(eventos_sensores, EVENTO_NUEVOS_DATOS);  // notifica que hay nuevos datos
         } else {
             ESP_LOGW(TAG, "Cola llena, descartando muestra");
@@ -108,17 +118,41 @@ void vTaskReadSensors(void *pvParameters) {
     }
 }
 
+void adc_set_mqtt_client(esp_mqtt_client_handle_t client) {
+    adc_mqtt_client = client;
+}
+
 void vTaskProcessSensors(void *pvParameters) {
     sensor_data_t r;
-    for(;;) {
+    char payload[64];
+
+    for (;;) {
         if (xQueueReceive(cola_sensores, &r, portMAX_DELAY) == pdTRUE) {
+            // Log local
             ESP_LOGI(TAG,
                 "Humedad: %.1f%%   Temp: %.1f°C   @%lu",
                 r.humedad_pct,
                 r.temperatura_c,
                 (unsigned long)r.timestamp
             );
-            mqtt_publish_sensor_data(r.humedad_pct, r.temperatura_c);
+
+            // Publicar temperatura y humedad por MQTT
+            int len = snprintf(payload, sizeof(payload),
+                               "{\"hum\":%.1f,\"temp\":%.1f}",
+                               r.humedad_pct, r.temperatura_c);
+            if (adc_mqtt_client) {
+                int msg_id = esp_mqtt_client_publish(
+                    adc_mqtt_client,
+                    MQTT_TOPIC_PUBLISH,
+                    payload,
+                    len,
+                    1,    // QoS1
+                    0     // retain
+                );
+                ESP_LOGI(MQTT_TAG, "Publicado msg_id=%d en %s", msg_id,
+                         MQTT_TOPIC_PUBLISH);
+            }
         }
     }
 }
+
