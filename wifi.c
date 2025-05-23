@@ -1,28 +1,44 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdbool.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
+#include "esp_err.h"
+#include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
-#include "esp_log.h"
 #include "nvs_flash.h"
-#include "freertos/event_groups.h"
+#include "esp_netif.h"
+#include "esp_event_base.h"
 
-#define WIFI_SSID      "ThinkpadJorter"
-#define WIFI_PASSWORD  "wifiJorter"
+
+#define WIFI_SSID      "RicardoWifi"
+#define WIFI_PASSWORD  "wifiprueba"
 #define WIFI_CONNECTED_BIT BIT0
 
 static EventGroupHandle_t wifi_event_group;
-static const char *TAG = "wifi";
+static const char *WIFI_TAG = "WiFi";
 
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data) {
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        esp_wifi_connect(); // reconecta automáticamente
+        esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
 
 void wifi_init_sta(void) {
+    nvs_flash_erase();  // ⚠ Esto borra TODO (certificados, claves, configuraciones previas)
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
     wifi_event_group = xEventGroupCreate();
     esp_netif_init();
     esp_event_loop_create_default();
@@ -44,10 +60,9 @@ void wifi_init_sta(void) {
     esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
     esp_wifi_start();
 
-    ESP_LOGI(TAG, "Conectando a WiFi...");
-    EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT,
-                                           pdFALSE, pdTRUE, portMAX_DELAY);
+    ESP_LOGI(WIFI_TAG, "Conectando a WiFi...");
+    EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "Conectado a WiFi");
+        ESP_LOGI(WIFI_TAG, "Conectado a WiFi");
     }
 }

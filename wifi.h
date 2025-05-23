@@ -1,14 +1,15 @@
-/**
-* @file wifi.h
- *
-**/
 #ifndef WIFI_H
 #define WIFI_H
-
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
 #include <stdbool.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
+#include "esp_err.h"
+#include "esp_log.h"
 
-/* Prepares the wifi subsystem and connects to the AP */
-void wifi_init_sta (void);
-
+void wifi_init_sta(void);
 #endif
-/*** End of file ***/
