@@ -1,3 +1,4 @@
+// wifi.h
 #ifndef WIFI_H
 #define WIFI_H
 #include <stdio.h>
@@ -11,5 +12,5 @@
 #include "esp_err.h"
 #include "esp_log.h"
 
-void wifi_init_sta(void);
-#endif
+void wifi_init_sta(void);   // Inicializa la conexión WiFi
+#endif  // WIFI_H

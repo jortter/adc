@@ -1,3 +1,4 @@
+// wifi.c
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -15,20 +16,21 @@
 #include "esp_event_base.h"
 
 
-#define WIFI_SSID      "RicardoWifi"
-#define WIFI_PASSWORD  "wifiprueba"
+#define WIFI_SSID      CONFIG_ESP_WIFI_SSID     // Configuramos el SSID en menuconfig
+#define WIFI_PASSWORD  CONFIG_ESP_WIFI_PASSWORD // Configuramos la contraseña en menuconfig
 #define WIFI_CONNECTED_BIT BIT0
 
 static EventGroupHandle_t wifi_event_group;
 static const char *WIFI_TAG = "WiFi";
 
+// función para manejar eventos de WiFi
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) { // Evento de inicio de WiFi
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {   // Evento de desconexión
         esp_wifi_connect();
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) { // Evento de obtención de IP
+        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);   // Establecer el bit de conexión
     }
 }
 
